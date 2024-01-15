@@ -103,6 +103,7 @@ def BSConsume(MZ, SPN, f):
         M = SPN * s
     else:
         M -= sz
+```
 
 The parameter `MZ` is best described as the "lower bound of z" -- the lowest value of `z` that would have resulted in decoding the same symbol as the previously-peeked `z` actually resulted in (this statement may become more clear after reading the description of the Symbol-Coding layer). In the terms of arithmetic coder, this is the cumulative frequency of all symbols preceding the decoded symbol.
 
@@ -472,6 +473,7 @@ At this point, the complete repeat-offset can be constructed, and, with both the
 It is worth noting that, while the dynamic alphabet sizes of the "four-byte" and "one-k" decoders somewhat bound the decodable offsets, relative to the effective window size, they do not actually ensure that the total offset value is within the effective window (or even within the operational window). It is possible (but ill-formed) for the compressor to form repeat codes that refer to data lying outside the window, with indeterminate results.
 
 In psedo-code, the function of the `Decode` operation is as follows:
+
 ```
 def LZDecode():
     RLC = lenCoders[RLC].Decode(65)
@@ -512,6 +514,7 @@ The `LZEmitRepeat` pseudo-operation replays a string of bytes from the already-d
 
 The Oodle1 header is 12 bytes of metadata that must be provided alongside the data to be decompressed (although it is not required that it be prepended directly onto it); this metadata consists of the parameters that the compressor used, when compressing the data. We present the data here in the order that it would be seen on a little-endian platform; if the compressor was run on a big-endian platform, it will be necessary to endian-correct each four-byte word of the Oodle1 header.
 
+```
      3                   2                   1
    1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -521,6 +524,7 @@ The Oodle1 header is 12 bytes of metadata that must be provided alongside the da
   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
   | uniqRepLens0  | uniqRepLens1  | uniqRepLens2  | uniqRepLens3  |
   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
 
 `litAlphabetSize` specifies the absolute size of the literal alphabet. Often this is 256 (meaning that all 8-bit bytes can be decompressed), however this is not required.
 
