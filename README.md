@@ -1,6 +1,6 @@
 # The Oodle1 Compression Scheme #
 
-Oodle1 is a data compression scheme developed by RAD Game Tools, commonly used in various videogames. Note that RAD Game Tools also offers a data compression product, featuring a variety of different compression algorithms which are referred to by various ocean-life monikers -- despite its name and common origin, Oodle1 does not appear to be a particularly close relative of the Oodle product library. An example of an instance where Oodle1 is used, is the game Heroes of Might and Magic V, which launched in 2006.
+Oodle1 is a data compression scheme developed by RAD Game Tools, commonly used in various videogames. Note that RAD Game Tools also offers a data compression library product called "Oodle", featuring a variety of different compression algorithms which are referred to by various ocean-life monikers -- despite its name and common origin, Oodle1 does not appear to be a particularly close relative of the Oodle product. An example of an instance where Oodle1 is used, is the game Heroes of Might and Magic V, which launched in 2006.
 
 This document attempts to capture a description of the Oodle1 compression scheme. It is primarily focused on the decompression side of the scheme, however presumably readers could infer how to create a compressor, from the descriptions provided here.
 
@@ -9,11 +9,11 @@ The high-level architecture of Oodle1 is comprised of three distinct functional 
  - A symbol-coder
  - An LZ77-style dictionary compressor
 
-Each of these units will be detailed, in the following sections, along with a general description of how the scheme is employed.
+Each of these units will be detailed in the following sections, along with a general description of how the scheme is employed.
 
 As a high-level remark, this document will make repeated reference to "the [0.0, 1.0) interval", and "the fixed-point representation of 1.0". Readers unfamiliar with the basic premises of arithmetic coders would likely be benefited by performing some amount of research into them, as the Oodle1 symbol decoder is quite similar to an arithmetic coder, and this document will not explain those concepts. To readers familiar with arithmetic coders, the significance of the [0.0, 1.0) interval and fixed-point representation of real numbers will be clear.
 
-Additionally, while this document will generally reference the 1.0 value as such, the fixed-point representation that Oodle1 has chosen for 1.0, is 0x4000. All references to 0.0 imply the integer value 0, and all references to 1.0 imply the integer value 0x4000. At no point in the Oodle1 compression scheme are floating-point values or operations used; all values and operations are integer, lying in the range [0, 0x4000]. Nevertheless, for the purposes of remaining focused on the fundamental concepts of Oodle1, rather than its concrete implementation, most references will be to the 0.0 and 1.0 values.
+Additionally, while this document will generally reference the 1.0 value as such, the fixed-point representation that Oodle1 has chosen for 1.0 is 0x4000. All references to 0.0 imply the integer value 0, and all references to 1.0 imply the integer value 0x4000. At no point in the Oodle1 compression scheme are floating-point values or operations used; all values and operations are integer, lying in the range [0, 0x4000]. Nevertheless, for the purposes of remaining focused on the fundamental concepts of Oodle1, rather than its concrete implementation, most references will be to the 0.0 and 1.0 values.
 
 
 ## Bitstream Layer ##
@@ -69,7 +69,7 @@ def BSIngest():
 
 ### Peek ###
 
-The `Peek' operation allows callers to examine the value that is present in the shift register, without necessarily modifying its contents. This operation requires a parameter from its caller: A specification of the fixed-point representation of "1.0" (f). With this parameter in hand, the operation is as follows:
+The `Peek' operation allows callers to examine the value that is present in the shift register, without necessarily modifying its contents. This operation requires a parameter from its caller: A specification of the fixed-point representation of "1.0" (`f`). With this parameter in hand, the operation is as follows:
 
 
 ```
@@ -105,7 +105,7 @@ def BSConsume(MZ, SPN, f):
         M -= sz
 ```
 
-The parameter `MZ` is best described as the "lower bound of z" -- the lowest value of `z` that would have resulted in decoding the same symbol as the previously-peeked `z` actually resulted in (this statement may become more clear after reading the description of the Symbol-Coding layer). In the terms of arithmetic coder, this is the cumulative frequency of all symbols preceding the decoded symbol.
+The parameter `MZ` is best described as the "lower bound of z" -- the lowest value of `z` that would have resulted in decoding the same symbol as the previously-peeked `z` actually resulted in (this statement may become more clear after reading the description of the Symbol-Coding layer). In the terms of an arithmetic coder, this is the cumulative frequency of all symbols preceding the decoded symbol.
 
 The parameter `SPN` is the "span of z", which is the fixed-point span that `z` occupied in the interval [0.0, 1.0); in the terms of an arithmetic coder, this would be the frequency of `z`.
 
@@ -113,7 +113,7 @@ The parameter `f` is once again the fixed-point representation of 1.0.
 
 Once again, the local variable `s` is a scalar for projecting values between the range present in the shift register, and the fixed-point interval.
 
-The local vairable `sz` is the result of scaling `MZ` back up into the range of the shift register.
+The local variable `sz` is the result of scaling `MZ` back up into the range of the shift register.
 
 The modification of `R` and `M` combine "consumption" of the bits of `z` from the shift register, with "rescaling" of the remaining bits in `R` (by reducing `M`).
 
@@ -153,13 +153,13 @@ The major operations of a symbol coder are:
  - Renormalize
  - Decode
 
-The motivations of the `Initialize` and `Decode` operations are obvious. The `Decay` and `Renormalize` operations are components of the coder's adaptation scheme; the coder learns symbols and their relative occurence rates, as data is coded, and it adjusts the "weights" of each symbol accordingly. With the term "weight", we are speaking of the proportion of the [0.0, 1.0) interval that the symbol occupies. This is related to the frequency of the symbol, however is not strictly equivalent to its frequency, due to the function of the adaptation scheme.
+The motivations of the `Initialize` and `Decode` operations are obvious. The `Decay` and `Renormalize` operations are components of the coder's adaptation scheme; the coder learns symbols and their relative occurrence rates, as data is coded, and it adjusts the "weights" of each symbol accordingly. With the term "weight", we are speaking of the proportion of the [0.0, 1.0) interval that the symbol occupies. This is related to the frequency of the symbol, however is not strictly equivalent to its frequency, due to the function of the adaptation scheme.
 
 The 'Decay' operation is responsible for reducing the weights of infrequently used symbols over time, and eventually aging them out of the interval entirely (their weight / span becomes 0, and thus cannot be decoded without being re-learned).
 
 The `Renormalize` operation is responsible for keeping the total weight of all learned symbols within some manageable bound that guarantees that there will be sufficient resolution within the bitstream layer, to unambiguously decode symbols. As its name implies, this largely consists of just multiplying the weight of each symbol by some appropriate scalar value to bring the sum of all weights back within the desired bound.
 
-As an ancillary function, `Renormalize` also serves the role of placing recently-learned symbols into the active alphabet. New symbols are not immediately placed into the alphabet; this only occurs at renormalization. In the interim, the symbols are held in a separate "probationary" alphabet, within which they can be decoded, but using a coding that is not yet weighted by their occurrence rate.
+As an ancillary function, `Renormalize` also serves the role of placing recently-learned symbols into the active alphabet. New symbols are not immediately placed into the [0.0, 1.0) interval; this only occurs at renormalization. In the interim, the symbols are held in a separate "probationary" alphabet, within which they can be decoded, but using a coding that is not yet weighted by their occurrence rate.
 
 Early after initialization, the coder performs renormalization operations frequently -- it can be expected to be rapidly learning many new symbols. The renormalization interval decays exponentially, until it reaches a steady-state value that is set during coder initialization.
 
@@ -196,9 +196,9 @@ The `LSW` member variable is an array of "recent occurrence frequency" which is 
 
 The `TLW` member variable is the sum of all `LSW`, so it is also initialized to 4.
 
-The `HLS` member variable is the value of the highest symbol learned thus far. It is, naturally, 0, as only the "0" symbol is in the active alphabet, and the probationary alphabet is empty. Note that `HLS` is equivalent to "number of symbols learned, minus one", as it is used in this context in various places.
+The `HLS` member variable is the value of the highest symbol learned thus far. It is naturally, 0, as only the "0" symbol is in the active alphabet, and the probationary alphabet is empty. Note that `HLS` is equivalent to "number of symbols in both alphabets, minus one", as it is used in this context in various places. When this is larger than the value of `HLSN`, the difference between them counts the number of symbols present in the probationary alphabet.
 
-The `HLSN` member variable is the value of the highest symbol learned, as of the most recent renormalization.
+The `HLSN` member variable is the value of the highest symbol learned, as of the most recent renormalization. Equivalently, `HLSN` can be viewed as "number of symbols in the active alphabet, minus one".
 
 The `NRW` member variable is the "next renormalization weight" -- once this much weight has been accumulated by learned symbols (`TLW`), the coder will be renormalized.
 
@@ -280,23 +280,23 @@ def SCRenormalize():
 
 The `q` local variable is a quantum that is used for rescaling the accumulated weights into the interval [0, 0x4000). To mitigate the effects of integer truncation, the quantum is not derived directly from 0x4000, but is instead derived from 0x20000, with a final divide-by-8 operation being performed when updating each individual weight. This preserves a greater degree of accuracy, when renormalizing.
 
-The `aw` local variable is an acummulator, tracking the amount of weight that has been distributed to symbols in the active alphabet, so far.
+The `aw` local variable is an accumulator, tracking the amount of weight that has been distributed to symbols in the active alphabet, so far.
 
 The core loop of this function is quite straightforward: It assigns each symbol a lower bound within the [0.0, 1.0) interval, which is the accumulated weight of each preceding symbol, and it calculates the span of that symbol, by rescaling its accumulated weight into the interval.
 
 Once the active alphabet has been updated, `RRI` is updated, to achieve the exponential decay of the rapid renormalizations that are performed shortly after coder startup, and the threshold for the next renormalization is set (`NRW`).
 
-The "highest symbol at last renormalization" (`HLSN`) member variable is updated, with the number of symbols in the active alphabet; this is required by the `Decode` operation, to determine how many symbols exist within the probationary alphabet.
+The "highest symbol at last renormalization" (`HLSN`) member variable is updated, with the number of symbols in the active alphabet; this is required by the `Decode` operation, to determine how many symbols exist within the probationary alphabet (which is always empty, immediately after renormalization).
 
 Finally, the weights of symbols lying outside the active alphabet are set to the 1.0 value (thus apportioning them no span in the interval).
 
 
 ### Decode ###
 
-At last, we can describe the `Decode` operation. This operation is provided with the number of unique symbols that might be decoded in the current context of the LZ layer, and ingests a fixed-point number from the bitstream layer, to form into a symbol. Along the way, it learns new symbols, and monitors the occurrence rates of old.
+At last, we can describe the `Decode` operation. This operation is provided with the effective alphabet size (number of unique symbols that might be decoded) of the current context of the LZ layer (`eas'), and ingests a fixed-point number from the bitstream layer, to form into a symbol. Along the way, it learns new symbols, and monitors the occurrence rates of old.
 
 ```
-def SCDecode(sc):
+def SCDecode(eas):
     if TLW >= NRW:              # Condition 1
         if TLW >= DT:           # Condition 2
             SCDecay()
@@ -319,7 +319,7 @@ def SCDecode(sc):
                 TLW += 2
                 return LS[i]
         HLS += 1
-        LS[HLS] = BSGet(sc)
+        LS[HLS] = BSGet(eas)
         LSW[HLS] += 2
         TLW += 2
         if HLS == US:           # Condition 4
@@ -336,11 +336,11 @@ The active alphabet is consulted ("Decode From Active"), and it is determined wh
 
 At this point, the bitstream layer is informed that the symbol has been consumed (with knowledge about its exact probability span), and the learned occurrence rate of the symbol (`LSW[i]`) is incremented, along with the total occurrence rate (`TLW`).
 
-Now, a decision is made about whether the decoded symbol is a terminal symbol (i.e., not the "0" symbol); if it is ("Active Symbol"), then the symbol is returned to the LZ layer.
+Now, a decision is made about whether the decoded symbol is the "learning" symbol (the "0" symbol); if it is not ("Active Symbol"), then the symbol is returned to the LZ layer.
 
 If the "0" symbol was decoded ("0 Symbol"), this is an indicator to the coder that the symbol being decoded is either:
  - A brand-new symbol, not yet learned, or
- - A symbol learned, but in the probationary alphabet, since renormalization has not occurred since learning
+ - A symbol learned, but in the probationary alphabet, since renormalization has not occurred since learning it
 
 These cases are distingushed through the combination of "Condition 3" and "Probationary Symbol"; if no new symbols have been learned since the last renormalization, then the symbol cannot be a member of the probationary alphabet, as the probationary alphabet is empty (all known symbols are in the active alphabet). If the probationary alphabet is not empty, then the next bit of the fixed-point number in the bitstream layer is consulted.
 
@@ -371,19 +371,20 @@ The major interfaces of the LZ layer are:
  - Decode symbols, via the Symbol-Coder layer
  - Emit decompressed data bytes
 
-As an LZ-style dictionary decompressor, the LZ layer has a concept of a "window", which bounds the amount of previously-decompressed data that can be referenced by "repeat" codes. The maximum operational size of the Oodle1 LZ window is configurable through its header, however there is a hard cap at 256KiB -- the window cannot be larger than this.
+As an LZ-style dictionary decompressor, the LZ layer has the concept of a "window", which bounds the amount of previously-decompressed data that can be referenced by "repeat" codes. The maximum operational size of the Oodle1 LZ window is configurable through its header, however there is a hard cap at 256KiB -- the window cannot be larger than this.
 
 When describing the `Decode` operation, we will additionally call on the concept of an "effective" window size, which is the operational window size, but not greater than the number of bytes already decompressed -- this value bounds the maximum possible offset, and is intrinsic to how repeat-offset symbols are decoded.
 
 A point of distinction between Oodle1's LZ scheme, as compared with a more typical LZ77 scheme, comes in how it encodes the offsets of repeat codes. The offset is not a single integer number; instead, it is formed from three distinct fields, which (presented in the order in which they must be decoded) are:
- - A "one-byte" field ('1b')
- - A "one-k" field ('4b')
- - A "four-byte" field ('1k')
+ - A "one-byte" field (`1b`)
+ - A "one-k" field (`4b`)
+ - A "four-byte" field (`1k`)
+
 The total offset is formed using the expected mathematical operation: `(1k * 1024) + (4b * 4) + 1b`
 
 As a more major deviation from "classical" LZ77, which uses a single set of Huffman codes for decoding symbols in all contexts, Oodle1's LZ layer is quite "context-dependent"; it does not get its symbols from a single Symbol-Coder, and instead has as many as 327 Symbol-Coders at its disposal, to decode symbols from various contexts:
 
-Four (4) decoders are used for decoding literals, selected on the basis of the number of bytes thus far decompressed, modulo 4. This scheme can be expected to provide excellent results when dealing with 8-bit RGBA image data, as each decoder will see the values of only a single color component (Red, Green, Blue, or Alpha), which can reasonably be expected to change fairly slowly. This design likely also lends itself to 32-bit floating-point values, where the exponent bits tend to take on a fairly confined set of values, in typical data.
+Four (4) decoders are used for decoding literals, selected on the basis of the number of bytes thus far decompressed, modulo 4. This scheme can be expected to provide excellent results when dealing with 8-bit RGBA image data, as each decoder will see the values of only a single color component (Red, Green, Blue, or Alpha), which can reasonably be expected to change fairly slowly, in typical game texture data. This design likely also lends itself to 32-bit floating-point values, where the exponent bits tend to take on a fairly confined set of values, in typical data.
 
 Sixty-five (65) decoders are used for decoding repeat lengths. The decoder to use is selected by the length of the *previous* decoded repeat length-code (which is not precisely the same thing as the previously decoded repeat length, as we will discuss soon).
 
@@ -452,6 +453,7 @@ If the repeat length-code is 0, then a literal is to be decompressed. The `Decod
 
 If the repeat length-code is not 0, then it is interpreted, according to this table:
 
+```
  Code | Repeat Length
 ------+---------------
     1 | 2
@@ -461,6 +463,7 @@ If the repeat length-code is not 0, then it is interpreted, according to this ta
    62 | 192
    63 | 256
    64 | 512
+```
 
 Then, the repeat-offset is decoded: First, a symbol is decoded, using the "one-byte" decoder; the "one-byte" field is equal to this symbol, plus one (i.e., decoding a "2" symbol means that the "one-byte" field is 3).
 
@@ -555,7 +558,7 @@ Interfacing with the LZ layer to decompress Oodle1 data is almost a trivial oper
 
 ## Oodle1 in Granny2 Files ##
 
-A common user of Oodle1 compression, is Granny2 data files, which are used by various games for storing assets. This document does not generally concern itself with the structure or interpretation of Granny2 files, as our focus is on the Oodle1 compression scheme, however we will give a very brief treatment to a couple of details about the usage of Oodle1, within Granny2 files:
+A common user of Oodle1 compression is Granny2 data files, which are used by various games for storing assets. This document does not generally concern itself with the structure or interpretation of Granny2 files, as our focus is on the Oodle1 compression scheme, however we will give a very brief treatment to a couple of details about the usage of Oodle1, within Granny2 files:
 
 First, the blocks of compressed data in Granny2 files do not necessarily contain a single stream of compressed data. Instead, each compressed block may contain up to three distinct streams of compressed data, concatenated together. The results of decompressing those streams are likewise concatenated together, to form the complete decompressed block. The Oodle1 scheme requires that the decompressor be aware of how many bytes of data it is expected to decompress, and accordingly Granny2 files specify the uncompressed length that marks the end of each data stream. After decompressing enough data to reach the switchover point from one stream to the next, the Granny2 decoder must initialize a new Oodle1 decompressor with the next stream's header, and continue decompressing.
 
