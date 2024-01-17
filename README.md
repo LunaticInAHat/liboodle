@@ -69,7 +69,7 @@ def BSIngest():
 
 ### Peek ###
 
-The `Peek' operation allows callers to examine the value that is present in the shift register, without necessarily modifying its contents. This operation requires a parameter from its caller: A specification of the fixed-point representation of "1.0" (`f`). With this parameter in hand, the operation is as follows:
+The `Peek` operation allows callers to examine the value that is present in the shift register, without necessarily modifying its contents. This operation requires a parameter from its caller: A specification of the fixed-point representation of "1.0" (`f`). With this parameter in hand, the operation is as follows:
 
 
 ```
@@ -157,7 +157,7 @@ The major operations of a symbol coder are:
 
 The motivations of the `Initialize` and `Decode` operations are obvious. The `Decay` and `Renormalize` operations are components of the coder's adaptation scheme; the coder learns symbols and their relative occurrence rates, as data is coded, and it adjusts the "weights" of each symbol accordingly. With the term "weight", we are speaking of the proportion of the [0.0, 1.0) interval that the symbol occupies. This is related to the frequency of the symbol, however is not strictly equivalent to its frequency, due to the function of the adaptation scheme.
 
-The 'Decay' operation is responsible for reducing the weights of infrequently used symbols over time, and eventually aging them out of the interval entirely (their weight / span becomes 0, and thus cannot be decoded without being re-learned).
+The `Decay` operation is responsible for reducing the weights of infrequently used symbols over time, and eventually aging them out of the interval entirely (their weight / span becomes 0, and thus cannot be decoded without being re-learned).
 
 The `Renormalize` operation is responsible for keeping the total weight of all learned symbols within some manageable bound that guarantees that there will be sufficient resolution within the bitstream layer, to unambiguously decode symbols. As its name implies, this largely consists of just multiplying the weight of each symbol by some appropriate scalar value to bring the sum of all weights back within the desired bound.
 
