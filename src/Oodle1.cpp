@@ -89,8 +89,12 @@ void Oodle1Decoder::Renormalize() {
 		symbolWeights[idx] = accumulator;
 		accumulator += ((symbolOccurrences[idx] * quanta) / 8);
 	}
-	rapidRenormInterval *= 2;
-	nextRenormWeight = totalOccurrence + std::min(rapidRenormInterval, renormInterval);
+	if ((rapidRenormInterval * 2) < renormInterval) {
+		rapidRenormInterval *= 2;
+		nextRenormWeight = totalOccurrence + rapidRenormInterval;
+	} else {
+		nextRenormWeight = totalOccurrence + renormInterval;
+	}
 	highestNormalizedSymbol = highestLearnedSymbol;
 	std::fill(symbolWeights.begin() + highestLearnedSymbol + 1, symbolWeights.end(), One);
 }

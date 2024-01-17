@@ -145,7 +145,9 @@ The update of `M` differs slightly from the `Consume` operation, however the fun
 
 ## Symbol-Coding Layer ##
 
-The Symbol-Coding layer is responsible for taking in fixed-point numbers from the bitstream layer, and providing decoded symbols to the LZ layer. Fundamentally, each symbol decoder is an adaptive, fixed-point decoder that operates along the same basic principles as a classical arithmetic coder, but which deviates from the traditional formulation of an arithmetic coder in various details.
+The Symbol-Coding layer is responsible for taking in fixed-point numbers from the bitstream layer, and providing decoded symbols to the LZ layer. Fundamentally, each symbol decoder is an adaptive, fixed-point decoder that operates along the same basic principles as a classical arithmetic coder, but which deviates from the basic formulation of an arithmetic coder in various details. Notably, it is not a binary arithmetic coder (which maps its input as an arbitrary-precision binary fraction in the interval); it is instead a *multisymbol* arithmetic coder (which does still project its inputs into the interval, but not as a binary fraction).
+
+The "adaptive" characteristics of the Oodle1 Symbol-Coder will be described in more detail below, however a brief summary here may aid readers' understanding: The Oodle1 coder has three distinct alphabets, that it is able to code symbols from (the term "alphabet" could be taken as synonymous with "context", however we avoid this term to avoid confusion with the LZ layer). In this document, we will refer to these alphabets as the "active", "probationary", and "proportional" alphabets. The "active" alphabet contains symbols that have been learned from the decoded stream, and which have been given representative spans of the [0.0, 1.0) interval, given their observed occurrence rate. The "probationary" alphabet contains symbols that have only just been learned from the decoded stream, but which have not yet been given representative spans in the [0.0, 1.0) interval; symbols within the probationary alphabet are assumed to have equal occurrence rates with other symbols of the probationary alphabet. These first two coders constitute the "adaptive" portion of the coder. The "proportional" alphabet contains all symbols that the coder is able to decode, with equal occurrence rates. By default, the coder decodes from the "active" alphabet; an "Escape" symbol is used to transition to the "probationary" and "proportional" alphabets.
 
 The major operations of a symbol coder are:
  - Initialize
@@ -188,15 +190,15 @@ The `p_AS` parameter is the absolute size of the alphabet being decoded. This is
 
 The `p_US` parameter is the number of unique symbols that are expected to occur, in the course of decompression. It is stored for future use, during symbol learning.
 
-The `LS` member variable is an array of the values of each symbol in the active alphabet. The value of the "0" symbol is set to 0, however it is crucial to understand that the "0" symbol is special in the Oodle1 symbol-coder (as will become apparent when we examine the `Decode` operation); the "0" symbol is *not* the symbol used to represent the byte value 0, despite this initialization. In fact, the "0" symbol can never be the final result of a `Decode` operation, and this initialization serves only as an anchor to document the existence of the `LS` array.
+The `LS` member variable is an array of the values of each symbol in the active alphabet. The value of the "0" symbol is set to 0, however it is crucial to understand that the "0" symbol is special in the Oodle1 symbol-coder (as will become apparent when we examine the `Decode` operation); the "0" symbol is *not* the symbol used to represent the byte value 0, despite this initialization. In fact, the "0" symbol can never be the final result of a `Decode` operation. This initialization serves only as an anchor to document the existence of the `LS` array; the "0" symbol is, in fact the "Escape" symbol, which will allow the coder to use multiple alphabets when coding, depending upon context.
 
 The `SW` member variable is an array of *cumulative* weights for each symbol in the active alphabet. These will be used to decode `z` values obtained from the bitstream layer into symbols. In the terms of an arithmetic coder, these are the cumulative frequencies of each symbol, setting thresholds along the [0.0, 1.0) interval where each symbol's span begins. The value 0x4000 is the fixed-point representation of 1.0 that is used by the Oodle1 symbol coder, and the entire array of symbol weights is initialized with this value, save for the first element, which naturally begins at 0.0.
 
-The `LSW` member variable is an array of "recent occurrence frequency" which is maintained for each symbol in the alphabet (active and probationary), which tracks how often each symbol is observed, and is used during renormalization to apportion a suitable span of the [0.0, 1.0) interval. The frequency of the "0" symbol is set to 4.
+The `LSW` member variable is an array of "recent occurrence frequency" which is maintained for each symbol in the alphabet (active and probationary), which tracks how often each symbol is observed, and is used during renormalization to apportion a suitable span of the [0.0, 1.0) interval. The frequency of the "Escape" symbol is set to 4.
 
 The `TLW` member variable is the sum of all `LSW`, so it is also initialized to 4.
 
-The `HLS` member variable is the value of the highest symbol learned thus far. It is naturally, 0, as only the "0" symbol is in the active alphabet, and the probationary alphabet is empty. Note that `HLS` is equivalent to "number of symbols in both alphabets, minus one", as it is used in this context in various places. When this is larger than the value of `HLSN`, the difference between them counts the number of symbols present in the probationary alphabet.
+The `HLS` member variable is the value of the highest symbol learned thus far. It is naturally, 0, as only the "Escape" symbol is in the active alphabet, and the probationary alphabet is empty. Note that `HLS` is equivalent to "number of symbols in both alphabets, minus one", as it is used in this context in various places. When this is larger than the value of `HLSN`, the difference between them counts the number of symbols present in the probationary alphabet.
 
 The `HLSN` member variable is the value of the highest symbol learned, as of the most recent renormalization. Equivalently, `HLSN` can be viewed as "number of symbols in the active alphabet, minus one".
 
@@ -208,7 +210,7 @@ The `RRI` member variable is the "rapid renormalization interval" -- this is the
 
 The `RI` member variable is the "renormalization interval" -- this is the amount by which `NRW` will be incremented, once the "rapid learning" phase is over, and the coder reaches steady-state operation.
 
-Implementers must note that the implementation presented in this document requires that the arrays `LS`, `LSW`, and `SW` be oversized by at least 2 elements, compared to the actual alphabet size. This is because slots must be reserved for both the "0" symbol (at 0.0), and the "1" symbol (at 1.0). The "1" can never be decoded, however it is required to be present, for the `Decode` operation to operate properly, as presented.
+Implementers must note that the implementation presented in this document requires that the arrays `LS`, `LSW`, and `SW` be oversized by at least 2 elements, compared to the actual alphabet size. This is because slots must be reserved for both the "Escape" symbol (at 0.0), and the "1" symbol (at 1.0). The "1" can never be decoded, however it is required to be present, for the `Decode` operation to operate properly, as presented.
 
 
 ### Decay ###
@@ -257,7 +259,7 @@ Second, the symbols that remain in the active alphabet each have their weight ha
 
 At "Condition 4", the highest-weighted symbol is moved to the end of the active alphabet, if it is not already there.
 
-Finally, at "Condition 5", it is ensured that the "0" symbol does not get aged out of the alphabet, unless the active alphabet already contains all possible symbols -- the reason why it is acceptable to age the "0" symbol out in this case will become clear, when we describe the `Decode` operation.
+Finally, at "Condition 5", it is ensured that the "Escape" symbol does not get aged out of the alphabet, unless the active alphabet already contains all possible symbols -- the reason why it is acceptable to age the "Escape" symbol out in this case will become clear, when we describe the `Decode` operation.
 
 
 ### Renormalize ###
@@ -272,8 +274,11 @@ def SCRenormalize():
     for i in [1, HLS]:
         SW[i] = aw
         aw += (LSW[i] * q) / 8
-    RRI *= 2
-    NRW = TLW + min(RRI, RI)
+    if (RRI * 2) < RI:
+        RRI *= 2
+        NRW = TLW + RRI
+    else:
+        NRW = TLW + RI
     HLSN = HLS
     fill(SW[i..], 0x4000)
 ```
@@ -310,7 +315,7 @@ def SCDecode(eas):
     TLW += 1
     if i != 0:                  # Active Symbol
         return LS[i]
-    else:                       # 0 Symbol
+    else:                       # Escape
         if HLS != HLSN:         # Condition 3
             b = BSGet(2)
             if b:               # Probationary Symbol
@@ -336,9 +341,9 @@ The active alphabet is consulted ("Decode From Active"), and it is determined wh
 
 At this point, the bitstream layer is informed that the symbol has been consumed (with knowledge about its exact probability span), and the learned occurrence rate of the symbol (`LSW[i]`) is incremented, along with the total occurrence rate (`TLW`).
 
-Now, a decision is made about whether the decoded symbol is the "learning" symbol (the "0" symbol); if it is not ("Active Symbol"), then the symbol is returned to the LZ layer.
+Now, a decision is made about whether the decoded symbol is the "Escape" symbol; if it is not ("Active Symbol"), then the symbol is returned to the LZ layer.
 
-If the "0" symbol was decoded ("0 Symbol"), this is an indicator to the coder that the symbol being decoded is either:
+If the "Escape" symbol was decoded ("Escape"), this is an indicator to the coder that the symbol being decoded is either:
  - A brand-new symbol, not yet learned, or
  - A symbol learned, but in the probationary alphabet, since renormalization has not occurred since learning it
 
@@ -346,15 +351,17 @@ These cases are distingushed through the combination of "Condition 3" and "Proba
 
 If that bit is a 1, then the symbol being decoded is in the probationary alphabet ("Probationary Symbol"). All symbols in the probationary alphabet are assumed to have equal probability, so the bitstream layer is asked to decode a number bounded by the size of the probationary alphabet (`i`). That symbol is then adjusted to reflect its position near/at the end of the alphabet, its occurrence rate is adjusted (`LSW[i]`, and `TLW`), and it is returned to the caller.
 
-If the probationary alphabet is empty, or the next bit decoded was a 0, then the symbol being decoded is brand new. The number of learned symbols is incremented, the new symbol is decoded from the bitstream layer (using knowledge provided by the caller, about how many distinct symbols can occur in the current LZ context), and its weights are updated (`LSW[HLS]` and `TLW`).
+If the probationary alphabet is empty, or the next bit decoded was a 0, then the symbol being decoded is from the proportional alphabet. The number of learned symbols is incremented, the new symbol is decoded from the bitstream layer (using knowledge provided by the caller, about how many distinct symbols can occur in the current LZ context -- i.e., the size of the proportional alphabet), and its weights are updated (`LSW[HLS]` and `TLW`).
 
-Before returning the newly learned symbol to the caller, a check is performed at "Condition 4", to see if the entire set of unique symbols has now been learned into the active and probationary alphabets. If all possible symbols reside within the union of those alphabets, then the "0" symbol should no longer occur -- all symbols have been learned, so the alphabets should not expand further. Thus, the learned weight of the "0" symbol is set to 0 (with `TLW` being modified accordingly). Note that this does not immediately impact the ability to decode "0" symbols -- this is still necessary, as long as the probationary alphabet still has symbols in it. However, at the next renormalization, all members of the probationary alphabet will get moved into the active alphabet, and (assuming no other members of the active alphabet age out) the "0" symbol will be aged out.
+This combination of logic could be viewed as though the coder in fact had *two* escape symbols, which were perpetually balanced such that they had equal weight against one another: Viewed this way, the "Escape0" symbol would instruct the decoder to shift to the proportional alphabet for the next symbol, while the "Escape1" symbol instructs the decoder to shift to the probationary alphabet. An equivalent view would be that the "Escape" symbol shifts the decoder into the probationary alphabet, which itself contains an "Escape" to the proportional alphabet, which always occupies the span [0.0, 0.5).
+
+Before returning the newly learned symbol to the caller, a check is performed at "Condition 4", to see if the entire set of unique symbols has now been learned into the active and probationary alphabets. If all possible symbols reside within the union of those alphabets, then the "Escape" symbol should no longer occur -- all symbols have been learned, so the alphabets should not expand further. Thus, the learned weight of the "Escape" symbol is set to 0 (with `TLW` being modified accordingly). Note that this does not immediately impact the ability to decode "Escape" symbols -- this is still necessary, as long as the probationary alphabet still has symbols in it. However, at the next renormalization, all members of the probationary alphabet will get moved into the active alphabet, and (assuming no other members of the active alphabet age out) the "Escape" symbol will be aged out.
 
 Note that symbols that are either newly-learned, or in the probationary alphabet, have their occurrence rate incremented by 2, rather than the 1 that is used for members of the active alphabet. This serves two purposes:
  - It allows new symbols to rapidly establish themselves in the interval, if they occur frequently (e.g., the tone of the data being decompressed has significantly shifted)
  - It ensures that newly-learned symbols are not immediately aged out, if they have the misfortune to be learned immediately prior to a renormalization
 
-Also note that the occurrence rate of the "0" symbol is tracked, just like the members of the active alphabet -- if many new symbols are being learned, then the "0" symbol will accordingly be given a greater share of the interval, to give it shorter encodings. Conversely, if new symbols are only being learned rarely, the "0" symbol will shrink in the interval, to give shorter encodings to the symbols of the active alphabet.
+Also note that the occurrence rate of the "Escape" symbol is tracked, just like the members of the active alphabet -- if many new symbols are being learned, then the "Escape" symbol will accordingly be given a greater share of the interval, to give it shorter encodings. Conversely, if new symbols are only being learned rarely, the "Escape" symbol will shrink in the interval, to give shorter encodings to the symbols of the active alphabet.
 
 
 ## LZ Layer ##
