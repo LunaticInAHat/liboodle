@@ -7,7 +7,7 @@ This document attempts to capture a description of the Oodle1 compression scheme
 The high-level architecture of Oodle1 is comprised of three distinct functional units, in a layered relationship with one another. In order from the bottom layer to the top, they are:
  - A bitstream parser
  - A symbol-coder
- - An LZ77-style dictionary compressor
+ - An LZSS-style dictionary compressor
 
 Each of these units will be detailed in the following sections, along with a general description of how the scheme is employed.
 
@@ -264,7 +264,7 @@ Finally, at "Condition 5", it is ensured that the "Escape" symbol does not get a
 
 ### Renormalize ###
 
-The 'Renormalize' operation has also already had its high-level motivation described above; it serves to bound the accumulated weights of the various symbols, and to apportion spans of the [0.0, 1.0) interval to each symbol that has been learned so far, thus placing them into the active alphabet.
+The `Renormalize` operation has also already had its high-level motivation described above; it serves to bound the accumulated weights of the various symbols, and to apportion spans of the [0.0, 1.0) interval to each symbol that has been learned so far, thus placing them into the active alphabet.
 
 ```
 def SCRenormalize():
@@ -366,7 +366,7 @@ Also note that the occurrence rate of the "Escape" symbol is tracked, just like 
 
 ## LZ Layer ##
 
-The LZ layer is, in some ways, a quite classic implementation of LZ77. The decompressor reads symbols from the symbol-coding layer, and constructs the symbols that it reads into either:
+The LZ layer is, in some ways, a quite classic implementation of LZSS. The decompressor reads symbols from the symbol-coding layer, and constructs the symbols that it reads into either:
  - A "repeat" code, which specifies a length & offset of already-decompressed data to replay into the output stream, or
  - A "literal" code, which provides a raw byte value to be emitted into the output stream
 
@@ -382,14 +382,14 @@ As an LZ-style dictionary decompressor, the LZ layer has the concept of a "windo
 
 When describing the `Decode` operation, we will additionally call on the concept of an "effective" window size, which is the operational window size, but not greater than the number of bytes already decompressed -- this value bounds the maximum possible offset, and is intrinsic to how repeat-offset symbols are decoded.
 
-A point of distinction between Oodle1's LZ scheme, as compared with a more typical LZ77 scheme, comes in how it encodes the offsets of repeat codes. The offset is not a single integer number; instead, it is formed from three distinct fields, which (presented in the order in which they must be decoded) are:
+A point of distinction between Oodle1's LZ scheme, as compared with a more typical LZSS scheme, comes in how it encodes the offsets of repeat codes. The offset is not a single integer number; instead, it is formed from three distinct fields, which (presented in the order in which they must be decoded) are:
  - A "one-byte" field (`1b`)
  - A "one-k" field (`4b`)
  - A "four-byte" field (`1k`)
 
 The total offset is formed using the expected mathematical operation: `(1k * 1024) + (4b * 4) + 1b`
 
-As a more major deviation from "classical" LZ77, which uses a single set of Huffman codes for decoding symbols in all contexts, Oodle1's LZ layer is quite "context-dependent"; it does not get its symbols from a single Symbol-Coder, and instead has as many as 327 Symbol-Coders at its disposal, to decode symbols from various contexts:
+As a more major deviation from "classical" LZSS, which uses a single set of Huffman codes for decoding symbols in all contexts, Oodle1's LZ layer is quite "context-dependent"; it does not get its symbols from a single Symbol-Coder, and instead has as many as 327 Symbol-Coders at its disposal, to decode symbols from various contexts:
 
 Four (4) decoders are used for decoding literals, selected on the basis of the number of bytes thus far decompressed, modulo 4. This scheme can be expected to provide excellent results when dealing with 8-bit RGBA image data, as each decoder will see the values of only a single color component (Red, Green, Blue, or Alpha), which can reasonably be expected to change fairly slowly, in typical game texture data. This design likely also lends itself to 32-bit floating-point values, where the exponent bits tend to take on a fairly confined set of values, in typical data.
 
